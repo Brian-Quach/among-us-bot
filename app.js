@@ -6,7 +6,7 @@ var sassMiddleware = require('node-sass-middleware');
 require('dotenv').config();
 
 var indexRouter = require('./routes/index');
-const discord_bot = require("./bots/discord")
+const among_us = require("./bots/among-us")
 
 var app = express();
 
@@ -24,6 +24,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 
-discord_bot.connect();
+among_us.connect();
 
 module.exports = app;
