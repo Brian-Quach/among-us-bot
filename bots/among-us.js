@@ -4,8 +4,13 @@ const client = new Discord.Client();
 
 async function connect() {
     client.on('ready', () => {
-      queue.setup();
-      console.log(`Logged in as ${client.user.tag}!`);
+      queue.setup().then(() => {
+        client.guilds.cache.keyArray().forEach(serverId => {
+          queue.createQueue(serverId);
+
+        })
+        console.log(`Logged in as ${client.user.tag}!`);
+      });
     });
     
     client.on('message', msg => {
@@ -13,7 +18,7 @@ async function connect() {
 
       // Remove identified
       let command = msg.content.substring((process.env.IDENTIFIER).length).split(' ');
-
+    
       if (['createQueue', 'cq'].includes(command[0])) {
         queue.createQueue(msg.guild.id, msg.author.id);
       }

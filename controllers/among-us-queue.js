@@ -2,17 +2,20 @@ const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database(":memory:");
 
 const setup = async () => {
-  db.serialize(() => {
-    db.run(
-      "CREATE TABLE queues ( serverId INTEGER NOT NULL UNIQUE, gameCode text, players INTEGER NOT NULL );"
-    );
-    db.run(
-      "CREATE TABLE players ( queue NUMBER NOT NULL, player NUMBER NOT NULL);"
-    );
+  return new Promise(function (resolve) {
+    db.serialize(() => {
+      db.run(
+        "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode text, players INTEGER NOT NULL );"
+      );
+      db.run(
+        "CREATE TABLE IF NOT EXISTS players ( queue NUMBER NOT NULL, player NUMBER NOT NULL);"
+      );
+      resolve();
+    });
   });
 };
 
-const createQueue = async (serverId, creatorId, numPlayers = 10) => {
+const createQueue = async (serverId, creatorId = null, numPlayers = 10) => {
   db.serialize(() => {
     db.run(
       `INSERT INTO queues (serverId, players) VALUES (${serverId}, ${numPlayers});`,
@@ -26,14 +29,15 @@ const createQueue = async (serverId, creatorId, numPlayers = 10) => {
               (_, row) => {
                 db.serialize(() => {
                   db.run(`DELETE FROM players WHERE queue = ${row.rowid};`);
+                  console.log("Recreated queue");
 
+                  if (creatorId === null) return;
                   db.run(
                     `INSERT INTO players (queue, player) VALUES (${this.lastID}, ${creatorId})`,
                     function (err) {
                       if (err) {
                         return console.log(err.message);
                       }
-                      console.log("Recreated queue");
                     }
                   );
                 });
@@ -42,15 +46,15 @@ const createQueue = async (serverId, creatorId, numPlayers = 10) => {
           }
           return console.log(err.message);
         }
-        console.log(this);
+        console.log("Created new queue");
+        if (creatorId === null) return;
         db.run(
           `INSERT INTO players (queue, player) VALUES (${this.lastID}, ${creatorId})`,
           function (err) {
             if (err) {
               return console.log(err.message);
             }
-            console.log(this);
-            console.log("Created new queue and enqueued player");
+            console.log("Enqueued player");
           }
         );
       }
@@ -75,14 +79,12 @@ const getQueue = async (serverId) => {
       db.all(
         `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
         (err, res) => {
-            if (err) {
-              return console.error(err.message);
-            }
-            console.log(res);
-
+          if (err) {
+            return console.error(err.message);
+          }
+          console.log(res);
         }
-
-      )
+      );
     }
   );
 };
@@ -112,22 +114,19 @@ const enqueue = async (serverId, playerId) => {
 };
 
 const dequeue = async (serverId, playerId) => {
-  db.get(
-    `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
-    (err, _) => {
-      if (err) {
-        return console.log("Couldn't find queue");
-      }
-      db.serialize(() => {
-        db.run(`DELETE FROM players WHERE player = ${playerId};`, (err) => {
-          if (err) {
-            return console.log(err.message);
-          }
-          console.log("Dequeue");
-        });
-      });
+  db.get(`SELECT rowID FROM queues WHERE serverId = ${serverId};`, (err, _) => {
+    if (err) {
+      return console.log("Couldn't find queue");
     }
-  );
+    db.serialize(() => {
+      db.run(`DELETE FROM players WHERE player = ${playerId};`, (err) => {
+        if (err) {
+          return console.log(err.message);
+        }
+        console.log("Dequeue");
+      });
+    });
+  });
 };
 
 module.exports = {
