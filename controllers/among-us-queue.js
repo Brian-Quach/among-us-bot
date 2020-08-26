@@ -19,7 +19,7 @@ const createQueue = async (serverId, creatorId, numPlayers = 10) => {
       function (err) {
         if (err) {
           if (err.errno === 19) {
-            // Server alreay has a queue
+            // Server already has a queue
 
             db.get(
               `SELECT rowID FROM queues WHERE serverId = ${serverId};`,

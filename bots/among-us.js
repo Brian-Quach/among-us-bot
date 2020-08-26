@@ -9,24 +9,34 @@ async function connect() {
     });
     
     client.on('message', msg => {
-      if (['createQueue', 'cq'].includes(msg.content)) {
-        queue.createQueue(123, 123);
+      if(!msg.content.startsWith(process.env.IDENTIFIER)) return;
+
+      // Remove identified
+      let command = msg.content.substring((process.env.IDENTIFIER).length).split(' ');
+
+      if (['createQueue', 'cq'].includes(command[0])) {
+        queue.createQueue(msg.guild.id, msg.author.id);
       }
 
 
-      if (['queue', 'q'].includes(msg.content)) {
-        queue.getQueue(123);
-      }
-      if (['queueplayer'].includes(msg.content)) {
-        queue.enqueue(123, 123);
+      if (['queue', 'q'].includes(command[0])) {
+        queue.getQueue(msg.guild.id);
       }
 
-      if (['kick', 'k'].includes(msg.content)) {
-        queue.createQueue(123, 123);
+      if (['queueplayer', 'qp'].includes(command[0])) {
+        if(!command[1].match(/<@!(\d{18})>/)) return;
+
+        queue.enqueue(msg.guild.id, command[1].substring(3,21));
       }
 
-      if (['setCode'].includes(msg.content)) {
-        queue.setCode(123, 'ABCD');
+      if (['kick', 'k'].includes(command[0])) {
+        if(!command[1].match(/<@!(\d{18})>/)) return;
+
+        queue.dequeue(msg.guild.id, command[1].substring(3,21));
+      }
+
+      if (['setCode'].includes(command[0])) {
+        queue.setCode(msg.guild.id, command[1]);
       }
 
     });
