@@ -5,10 +5,10 @@ const setup = async () => {
   return new Promise(function (resolve) {
     db.serialize(() => {
       db.run(
-        "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode text, players INTEGER NOT NULL );"
+        "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode TEXT, players INTEGER NOT NULL );"
       );
       db.run(
-        "CREATE TABLE IF NOT EXISTS players ( queue NUMBER NOT NULL, player NUMBER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS players ( queue INTEGER NOT NULL, player TEXT NOT NULL);"
       );
       resolve();
     });
@@ -69,24 +69,28 @@ const setCode = async (serverId, gameCode) => {
 };
 
 const getQueue = async (serverId) => {
-  db.get(
-    `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
-    (err, row) => {
-      if (err) {
-        return console.error(err.message);
-      }
-
-      db.all(
-        `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
-        (err, res) => {
-          if (err) {
-            return console.error(err.message);
-          }
-          console.log(res);
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
+      (err, row) => {
+        if (err) {
+          reject(err.message);
         }
-      );
-    }
-  );
+  
+        db.all(
+          `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
+          (err, res) => {
+            if (err) {
+              reject(err.message);
+            }
+            console.log(res)
+            resolve(res);
+          }
+        );
+      }
+    );
+
+  })
 };
 
 const enqueue = async (serverId, playerId) => {
@@ -98,7 +102,7 @@ const enqueue = async (serverId, playerId) => {
       }
       db.serialize(() => {
         // db.run(`DELETE FROM players WHERE queue = ${row.rowid};`);
-
+        console.log(`INSERT INTO players (queue, player) VALUES (${row.rowid}, ${playerId})`);
         db.run(
           `INSERT INTO players (queue, player) VALUES (${row.rowid}, ${playerId})`,
           function (err) {
