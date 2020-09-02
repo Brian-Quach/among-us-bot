@@ -1,6 +1,7 @@
 const Discord = require("discord.js");
 const queue = require("../controllers/among-us-queue");
 const client = new Discord.Client();
+const gameSize = 2;
 
 async function connect() {
   client.on("ready", () => {
@@ -28,17 +29,24 @@ async function connect() {
 
     if (["queue", "q"].includes(command[0])) {
       queue.getQueue(msg.guild.id).then(async (queue) => {
-
         let inGame = "```";
         let i;
-        for (i = 0; i < Math.min(queue.length, 10) ; i++) {
-          inGame = inGame + `\n${i+1}) ${msg.guild.members.cache.get(queue[i].player).user.username}`;
+        for (i = 0; i < Math.min(queue.length, gameSize); i++) {
+          inGame =
+            inGame +
+            `\n${i + 1}) ${
+              msg.guild.members.cache.get(queue[i].player).user.username
+            }`;
         }
         inGame = inGame + "\n```";
 
         let nextQueue = "```";
-        for (let j = 1; j <= Math.max(queue.length - 10, 0); j++, i++) {
-          nextQueue = nextQueue + `\n${j}) ${queue[i].player}`;
+        for (let j = 1; j <= Math.max(queue.length - gameSize, 0); j++, i++) {
+          nextQueue =
+            nextQueue +
+            `\n${i + 1}) ${
+              msg.guild.members.cache.get(queue[i].player).user.username
+            }`;
         }
         nextQueue = nextQueue + "\n```";
 
@@ -46,14 +54,8 @@ async function connect() {
           .setColor("#7289da")
           .setTitle("")
           .setDescription("")
-          .addField(
-            "Current in Game:",
-            inGame
-          )
-          .addField(
-            "Next in Queue:",
-            nextQueue
-          );
+          .addField("Currently in Game:", inGame)
+          .addField("Next in Queue:", nextQueue);
 
         msg.channel.send(queueMessage);
       });
@@ -65,16 +67,29 @@ async function connect() {
       let targetUser = msg.guild.members.cache.get(command[1].substring(3, 21));
       targetUser.roles.add([process.env.LIVE_ROLE]);
 
-      let inviteMessage = new Discord.MessageEmbed()
-        .setColor("#0099ff")
-        .setTitle(`Hey Crewmate, you're up!`)
-        .setDescription(
-          `Hey! It's your turn to play among us! Join the voice channel [here!](https://discord.gg/auEv2eG)`
-        );
-
-      targetUser.send(inviteMessage);
-
-      queue.enqueue(msg.guild.id, command[1].substring(3, 21));
+      queue.enqueue(msg.guild.id, command[1].substring(3, 21)).then((res) => {
+        if (res.position < gameSize) {
+          targetUser.send(
+            new Discord.MessageEmbed()
+              .setColor("#0099ff")
+              .setTitle(`Hey Crewmate, you're up!`)
+              .setDescription(
+                `Hiya! You've been queued for Among Us. ${
+                  res.roomCode ? `The room code is: ${res.roomCode}\n` : "\n"
+                }Join the voice call [here!](https://discord.gg/auEv2eG)`
+              )
+          );
+        } else {
+          targetUser.send(
+            new Discord.MessageEmbed()
+              .setColor("#0099ff")
+              .setTitle(`Queued!`)
+              .setDescription(
+                `Hiya! You've been queued for Among Us. \n Your position in line: ${res.position}`
+              )
+          );
+        }
+      });
     }
 
     if (["kick", "k"].includes(command[0])) {
@@ -86,8 +101,22 @@ async function connect() {
       queue.dequeue(msg.guild.id, command[1].substring(3, 21));
     }
 
-    if (["setCode"].includes(command[0])) {
-      queue.setCode(msg.guild.id, command[1]);
+    if (["setCode", "sc"].includes(command[0])) {
+      let code = command[1];
+      msg.delete();
+      queue.setCode(msg.guild.id, code);
+
+      //TODO: Send anyone in game the new code
+
+      queue.getQueue(msg.guild.id, gameSize).then(async (queue) => {
+        let inviteMessage = new Discord.MessageEmbed()
+          .setColor("#0099ff")
+          .setTitle(`Room code`)
+          .setDescription(`Hiya! The room code for Among Us is ${code}`);
+        queue.forEach((queueSlot) => {
+          msg.guild.members.cache.get(queueSlot.player).send(inviteMessage);
+        });
+      });
     }
   });
 

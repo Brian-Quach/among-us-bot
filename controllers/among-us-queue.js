@@ -1,5 +1,6 @@
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database(":memory:");
+const gameSize = 2;
 
 const setup = async () => {
   return new Promise(function (resolve) {
@@ -8,7 +9,7 @@ const setup = async () => {
         "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode TEXT, players INTEGER NOT NULL );"
       );
       db.run(
-        "CREATE TABLE IF NOT EXISTS players ( queue INTEGER NOT NULL, player TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS players ( queue INTEGER NOT NULL, player TEXT NOT NULL, inGame INTEGER DEFAULT 0);"
       );
       resolve();
     });
@@ -68,7 +69,7 @@ const setCode = async (serverId, gameCode) => {
   );
 };
 
-const getQueue = async (serverId) => {
+const getQueue = async (serverId, num = null) => {
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
@@ -76,58 +77,146 @@ const getQueue = async (serverId) => {
         if (err) {
           reject(err.message);
         }
-  
+
         db.all(
           `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
           (err, res) => {
             if (err) {
               reject(err.message);
             }
-            console.log(res)
+            res = res.sort((a, b) => {
+              if (a.inGame == 1 && b.inGame == 0) return -1;
+              return a.rowid > b.rowid ? 1 : -1;
+            });
+            if (num) {
+              res = res.slice(0, Math.min(res.length, num));
+            }
             resolve(res);
           }
         );
       }
     );
-
-  })
+  });
 };
 
 const enqueue = async (serverId, playerId) => {
-  db.get(
-    `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
-    (err, row) => {
-      if (err) {
-        return console.log("Couldn't find queue");
-      }
-      db.serialize(() => {
-        // db.run(`DELETE FROM players WHERE queue = ${row.rowid};`);
-        console.log(`INSERT INTO players (queue, player) VALUES (${row.rowid}, ${playerId})`);
-        db.run(
-          `INSERT INTO players (queue, player) VALUES (${row.rowid}, ${playerId})`,
-          function (err) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
+      (err, row) => {
+        if (err) {
+          reject("Couldn't find queue");
+        }
+        db.all(
+          `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
+          function (err, res) {
             if (err) {
-              return console.log(err.message);
+              reject(err.message);
             }
-            console.log("Enqueued");
+            let roomCode;
+            let currNumQueued = res.length;
+
+            db.serialize(() => {
+              db.run(
+                `INSERT INTO players (queue, player, inGame) VALUES (${
+                  row.rowid
+                }, ${playerId}, ${currNumQueued < gameSize ? 1 : 0})`,
+                function (err) {
+                  if (err) {
+                    reject(err.message);
+                  }
+                  console.log("Enqueued");
+                }
+              );
+              db.get(
+                `SELECT gameCode FROM queues WHERE serverId = ${serverId};`,
+                (err, queue) => {
+                  if (err) {
+                    reject(err.message);
+                  }
+                  roomCode = queue.gameCode;
+                }
+              );
+              db.all(
+                `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
+                (err, res) => {
+                  if (err) {
+                    reject(err.message);
+                  }
+                  res = res.sort((a, b) => (a.rowid > b.rowid ? 1 : -1));
+                  res.forEach((player, index) => {
+                    if (player.player == playerId) {
+                      let res = {
+                        player: playerId,
+                        roomCode: roomCode,
+                        position: index,
+                      };
+                      resolve(res);
+                    }
+                  });
+                }
+              );
+            });
           }
         );
-      });
-    }
-  );
+      }
+    );
+  });
 };
 
 const dequeue = async (serverId, playerId) => {
-  db.get(`SELECT rowID FROM queues WHERE serverId = ${serverId};`, (err, _) => {
-    if (err) {
-      return console.log("Couldn't find queue");
-    }
-    db.serialize(() => {
-      db.run(`DELETE FROM players WHERE player = ${playerId};`, (err) => {
-        if (err) {
-          return console.log(err.message);
-        }
-        console.log("Dequeue");
+  return new Promise((resolve, reject) => {
+    let gameCode;
+    db.get(`SELECT * FROM queues WHERE serverId = ${serverId};`, (err, res) => {
+      if (err) {
+        reject("Couldn't find queue");
+      }
+      gameCode = res.gameCode;
+      db.serialize(() => {
+        db.get(
+          `SELECT rowID, * FROM players WHERE player = ${playerId};`,
+          (err, res) => {
+            if (err) {
+              reject(err.message);
+            }
+            let player = res;
+            let rowId = res.rowid;
+
+            db.run(`DELETE FROM players WHERE player = ${playerId};`, (err) => {
+              if (err) {
+                reject(err.message);
+              }
+            });
+
+            // If player was in game, add next player to game and return their data so we can ping
+            if (player.inGame) {
+              db.all(
+                `SELECT rowID, * FROM players WHERE queue = ${rowId};`,
+                function (err, res){
+                  if (err) {
+                    reject(err.message);
+                  }
+                  
+                  res = res.sort((a, b) => {
+                    if (a.inGame == 1 && b.inGame == 0) return -1;
+                    return a.rowid > b.rowid ? 1 : -1;
+                  });
+
+                  for (let i = 0; i < res.length; i++) {
+                    if (res[i].inGame == 0 && i < gameSize) {
+                      let res = {
+                        player: res[i].player,
+                        roomCode: gameCode,
+                        position: i,
+                      };
+                      resolve(res);
+                    }
+                  }
+                }
+              );
+            }
+          }
+        );
       });
     });
   });
