@@ -79,16 +79,17 @@ async function connect() {
                 }Join the voice call [here!](https://discord.gg/auEv2eG)`
               )
           );
-        } else {
-          targetUser.send(
-            new Discord.MessageEmbed()
-              .setColor("#0099ff")
-              .setTitle(`Queued!`)
-              .setDescription(
-                `Hiya! You've been queued for Among Us. \n Your position in line: ${res.position}`
-              )
-          );
         }
+        // else {
+        //   targetUser.send(
+        //     new Discord.MessageEmbed()
+        //       .setColor("#0099ff")
+        //       .setTitle(`Queued!`)
+        //       .setDescription(
+        //         `Hiya! You've been queued for Among Us. \n Your position in line: ${res.position}`
+        //       )
+        //   );
+        // }
       });
     }
 
@@ -98,7 +99,22 @@ async function connect() {
       msg.guild.members.cache
         .get(command[1].substring(3, 21))
         .roles.remove([process.env.LIVE_ROLE]);
-      queue.dequeue(msg.guild.id, command[1].substring(3, 21));
+      queue.dequeue(msg.guild.id, command[1].substring(3, 21)).then(res => {
+        if(res === null) return;
+        if (res.position < gameSize) {
+          let targetUser = msg.guild.members.cache.get(res.player);
+          targetUser.send(
+            new Discord.MessageEmbed()
+              .setColor("#0099ff")
+              .setTitle(`Hey Crewmate, you're up!`)
+              .setDescription(
+                `Hiya! It's your turn for Among Us. ${
+                  res.roomCode ? `The room code is: ${res.roomCode}\n` : "\n"
+                }Join the voice call [here!](https://discord.gg/auEv2eG)`
+              )
+          );
+        }
+      });
     }
 
     if (["setCode", "sc"].includes(command[0])) {

@@ -1,5 +1,6 @@
 const sqlite3 = require("sqlite3").verbose();
-const db = new sqlite3.Database(":memory:");
+// const db = new sqlite3.Database(":memory:");
+const db = new sqlite3.Database('./db/among-us.db');
 const gameSize = 2;
 
 const setup = async () => {
@@ -166,12 +167,11 @@ const enqueue = async (serverId, playerId) => {
 
 const dequeue = async (serverId, playerId) => {
   return new Promise((resolve, reject) => {
-    let gameCode;
     db.get(`SELECT * FROM queues WHERE serverId = ${serverId};`, (err, res) => {
       if (err) {
         reject("Couldn't find queue");
       }
-      gameCode = res.gameCode;
+      const gameCode = res.gameCode;
       db.serialize(() => {
         db.get(
           `SELECT rowID, * FROM players WHERE player = ${playerId};`,
@@ -197,19 +197,26 @@ const dequeue = async (serverId, playerId) => {
                     reject(err.message);
                   }
                   
+                  console.log(res)
                   res = res.sort((a, b) => {
                     if (a.inGame == 1 && b.inGame == 0) return -1;
                     return a.rowid > b.rowid ? 1 : -1;
                   });
 
+                  console.log(res)
+
                   for (let i = 0; i < res.length; i++) {
                     if (res[i].inGame == 0 && i < gameSize) {
-                      let res = {
-                        player: res[i].player,
-                        roomCode: gameCode,
-                        position: i,
-                      };
-                      resolve(res);
+                      db.run(`UPDATE players set inGame = 1 WHERE player = ${playerId};`, (err) =>{
+                        if(err) {
+                          reject (err.message);
+                        }
+                        resolve({
+                          player: res[i].player,
+                          roomCode: gameCode,
+                          position: i,
+                        });
+                      })
                     }
                   }
                 }
