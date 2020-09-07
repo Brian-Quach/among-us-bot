@@ -63,11 +63,16 @@ async function connect() {
 
     if (["queueplayer", "qp"].includes(command[0])) {
       if (!command[1].match(/<@!(\d{18})>/)) return;
+      //TODO: Let people do >qp @whoever @otherperson...
+
+      console.log("queued");
 
       let targetUser = msg.guild.members.cache.get(command[1].substring(3, 21));
       targetUser.roles.add([process.env.LIVE_ROLE]);
 
+
       queue.enqueue(msg.guild.id, command[1].substring(3, 21)).then((res) => {
+        console.log(res);
         if (res.position < gameSize) {
           targetUser.send(
             new Discord.MessageEmbed()
@@ -76,30 +81,20 @@ async function connect() {
               .setDescription(
                 `Hiya! You've been queued for Among Us. ${
                   res.roomCode ? `The room code is: ${res.roomCode}\n` : "\n"
-                }Join the voice call [here!](https://discord.gg/auEv2eG)`
+                }Join the voice call [here!](${process.env.VC_LINK})`
               )
           );
         }
-        // else {
-        //   targetUser.send(
-        //     new Discord.MessageEmbed()
-        //       .setColor("#0099ff")
-        //       .setTitle(`Queued!`)
-        //       .setDescription(
-        //         `Hiya! You've been queued for Among Us. \n Your position in line: ${res.position}`
-        //       )
-        //   );
-        // }
       });
     }
 
     if (["kick", "k"].includes(command[0])) {
       if (!command[1].match(/<@!(\d{18})>/)) return;
-
       msg.guild.members.cache
         .get(command[1].substring(3, 21))
         .roles.remove([process.env.LIVE_ROLE]);
       queue.dequeue(msg.guild.id, command[1].substring(3, 21)).then(res => {
+        console.log("kicked,res=",res);
         if(res === null) return;
         if (res.position < gameSize) {
           let targetUser = msg.guild.members.cache.get(res.player);
