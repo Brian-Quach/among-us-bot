@@ -1,10 +1,11 @@
 const Discord = require("discord.js");
 const queue = require("../controllers/among-us-queue");
 const client = new Discord.Client();
-const gameSize = 2;
+const gameSize = 10;
 
 async function connect() {
   client.on("ready", () => {
+    client.user.setActivity("Just doing my tasks.")
     queue.setup().then(() => {
       client.guilds.cache.keyArray().forEach((serverId) => {
         queue.createQueue(serverId);
@@ -16,18 +17,18 @@ async function connect() {
   client.on("message", (msg) => {
     if (!msg.content.startsWith(process.env.IDENTIFIER)) return;
     if (!msg.member.hasPermission("ADMINISTRATOR"))
-      return console.log("User does not have admin!");
+      return console.log("User is not an admin!");
 
     // Remove identifier
     let command = msg.content
       .substring(process.env.IDENTIFIER.length)
       .split(" ");
 
-    if (["createQueue", "cq"].includes(command[0])) {
+    if (["createQueue", "cq", "clearQueue"].includes(command[0])) {
       queue.createQueue(msg.guild.id, msg.author.id);
     }
 
-    if (["queue", "q"].includes(command[0])) {
+    if (["queue", "q"].includes(command[0]) && (command.length == 1)) {
       queue.getQueue(msg.guild.id).then(async (queue) => {
         let inGame = "```";
         let i;
@@ -61,7 +62,7 @@ async function connect() {
       });
     }
 
-    if (["queueplayer", "qp"].includes(command[0])) {
+    if (["queue", "q", "queueplayer", "qp"].includes(command[0])) {
       for (let i = 1; i < command.length; i++) {
         if (!command[i].match(/<@!(\d{18})>/)) return;
 
@@ -90,7 +91,7 @@ async function connect() {
       }
     }
 
-    if (["kick", "k"].includes(command[0])) {
+    if (["kick", "k", "eject", "voteOut"].includes(command[0])) {
       for (let i = 1; i < command.length; i++) {
         if (!command[i].match(/<@!(\d{18})>/)) return;
         msg.guild.members.cache

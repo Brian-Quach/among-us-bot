@@ -1,7 +1,7 @@
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database(":memory:");
 // const db = new sqlite3.Database('./db/among-us.db');
-const gameSize = 2;
+const gameSize = 10;
 
 const setup = async () => {
   return new Promise(function (resolve) {
@@ -76,14 +76,14 @@ const getQueue = async (serverId, num = null) => {
       `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
       (err, row) => {
         if (err) {
-          reject(err.message);
+          return reject(err.message);
         }
 
         db.all(
           `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
           (err, res) => {
             if (err) {
-              reject(err.message);
+              return reject(err.message);
             }
             res = res.sort((a, b) => {
               if (a.inGame == 1 && b.inGame == 0) return -1;
@@ -107,13 +107,13 @@ const enqueue = async (serverId, playerId) => {
       `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
       (err, row) => {
         if (err) {
-          reject("Couldn't find queue");
+          return reject("Couldn't find queue");
         }
         db.all(
           `SELECT rowID, * FROM players WHERE queue = ${row.rowid} AND inGame = 1;`,
           function (err, res) {
             if (err) {
-              reject(err.message);
+              return reject(err.message);
             }
             let roomCode;
             let currNumQueued = res.length;
@@ -125,7 +125,7 @@ const enqueue = async (serverId, playerId) => {
                 }, ${playerId}, ${currNumQueued < gameSize ? 1 : 0})`,
                 function (err) {
                   if (err) {
-                    reject(err.message);
+                    return reject(err.message);
                   }
                   console.log("Enqueued");
                 }
@@ -134,7 +134,7 @@ const enqueue = async (serverId, playerId) => {
                 `SELECT gameCode FROM queues WHERE serverId = ${serverId};`,
                 (err, queue) => {
                   if (err) {
-                    reject(err.message);
+                    return reject(err.message);
                   }
                   roomCode = queue.gameCode;
                 }
@@ -143,7 +143,7 @@ const enqueue = async (serverId, playerId) => {
                 `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
                 (err, res) => {
                   if (err) {
-                    reject(err.message);
+                    return reject(err.message);
                   }
                   res = res.sort((a, b) => (a.rowid > b.rowid ? 1 : -1));
                   res.forEach((player, index) => {
@@ -171,16 +171,18 @@ const dequeue = async (serverId, playerId) => {
   return new Promise((resolve, reject) => {
     db.get(`SELECT * FROM queues WHERE serverId = ${serverId};`, (err, res) => {
       if (err) {
-        reject("Couldn't find queue");
+        return reject("Couldn't find queue");
       }
       const gameCode = res.gameCode;
       db.serialize(() => {
         db.get(
           `SELECT rowID, * FROM players WHERE player = ${playerId};`,
           (err, res) => {
+            console.log(res)
+            if(!res) return reject("Player not in queue");
             console.log("Player that we're removing:", res);
             if (err) {
-              reject(err.message);
+              return reject(err.message);
             }
             let player = res;
             let queueId = res.queue;
@@ -221,7 +223,7 @@ const dequeue = async (serverId, playerId) => {
                           `UPDATE players set inGame = 1 WHERE player = ${res[i].player};`,
                           (err) => {
                             if (err) {
-                              reject(err.message);
+                              return reject(err.message);
                             }
                             resolve({
                               player: res[i].player,
