@@ -26,6 +26,9 @@ async function connect() {
 
     if (["createQueue", "cq", "clearQueue"].includes(command[0])) {
       queue.createQueue(msg.guild.id, msg.author.id);
+      msg.guild.roles.cache.get(process.env.LIVE_ROLE).members.map((member) => {
+        member.roles.remove([process.env.LIVE_ROLE]);
+      });
     }
 
     if (["queue", "q"].includes(command[0]) && (command.length == 1)) {
