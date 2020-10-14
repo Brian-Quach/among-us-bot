@@ -3,9 +3,9 @@ const queue = require("../controllers/among-us-queue");
 const client = new Discord.Client();
 const gameSize = 10;
 
-async function connect() {
+const connect = async () => {
   client.on("ready", () => {
-    client.user.setActivity("Just doing my tasks.")
+    client.user.setActivity("Just doing my tasks.");
     queue.setup().then(() => {
       client.guilds.cache.keyArray().forEach((serverId) => {
         queue.createQueue(serverId);
@@ -14,7 +14,7 @@ async function connect() {
     });
   });
 
-  client.on("message", (msg) => {
+  client.on("message", async (msg) => {
     if (!msg.content.startsWith(process.env.IDENTIFIER)) return;
     if (!msg.member.hasPermission("ADMINISTRATOR"))
       return console.log("User is not an admin!");
@@ -22,47 +22,15 @@ async function connect() {
     // Remove identifier
     let command = msg.content
       .substring(process.env.IDENTIFIER.length)
+      .toLowerCase()
       .split(" ");
 
     if (["createQueue", "cq", "clearQueue"].includes(command[0])) {
-      queue.createQueue(msg.guild.id, msg.author.id);
+      await queue.createQueue(msg.guild.id, msg.author.id);
       msg.guild.roles.cache.get(process.env.LIVE_ROLE).members.map((member) => {
         member.roles.remove([process.env.LIVE_ROLE]);
       });
-    }
-
-    if (["queue", "q"].includes(command[0]) && (command.length == 1)) {
-      queue.getQueue(msg.guild.id).then(async (queue) => {
-        let inGame = "```";
-        let i;
-        for (i = 0; i < Math.min(queue.length, gameSize); i++) {
-          inGame =
-            inGame +
-            `\n${i + 1}) ${
-              msg.guild.members.cache.get(queue[i].player).user.username
-            }`;
-        }
-        inGame = inGame + "\n```";
-
-        let nextQueue = "```";
-        for (let j = 1; j <= Math.max(queue.length - gameSize, 0); j++, i++) {
-          nextQueue =
-            nextQueue +
-            `\n${i + 1}) ${
-              msg.guild.members.cache.get(queue[i].player).user.username
-            }`;
-        }
-        nextQueue = nextQueue + "\n```";
-
-        let queueMessage = new Discord.MessageEmbed()
-          .setColor("#7289da")
-          .setTitle("")
-          .setDescription("")
-          .addField("Currently in Game:", inGame)
-          .addField("Next in Queue:", nextQueue);
-
-        msg.channel.send(queueMessage);
-      });
+      showQueue(msg);
     }
 
     if (["queue", "q", "queueplayer", "qp"].includes(command[0])) {
@@ -76,22 +44,28 @@ async function connect() {
         );
         targetUser.roles.add([process.env.LIVE_ROLE]);
 
-        queue.enqueue(msg.guild.id, command[i].substring(3, 21)).then((res) => {
-          console.log(res);
-          if (res.position < gameSize) {
-            targetUser.send(
-              new Discord.MessageEmbed()
-                .setColor("#0099ff")
-                .setTitle(`Hey Crewmate, you're up!`)
-                .setDescription(
-                  `Hiya! You've been queued for Among Us. ${
-                    res.roomCode ? `The room code is: ${res.roomCode}\n` : "\n"
-                  }Join the voice call [here!](${process.env.VC_LINK})`
-                )
-            );
-          }
-        });
+        await queue
+          .enqueue(msg.guild.id, command[i].substring(3, 21))
+          .then((res) => {
+            console.log(res);
+
+            if (res.position < gameSize) {
+              targetUser.send(
+                new Discord.MessageEmbed()
+                  .setColor("#0099ff")
+                  .setTitle(`Hey Crewmate, you're up!`)
+                  .setDescription(
+                    `Hiya! You've been queued for Among Us. ${
+                      res.roomCode
+                        ? `The room code is: ${res.roomCode}\n`
+                        : "\n"
+                    }Join the voice call [here!](${process.env.VC_LINK})`
+                  )
+              );
+            }
+          });
       }
+      showQueue(msg);
     }
 
     if (["kick", "k", "eject", "voteOut"].includes(command[0])) {
@@ -100,24 +74,29 @@ async function connect() {
         msg.guild.members.cache
           .get(command[i].substring(3, 21))
           .roles.remove([process.env.LIVE_ROLE]);
-        queue.dequeue(msg.guild.id, command[i].substring(3, 21)).then((res) => {
-          console.log("kicked,res=", res);
-          if (res === null) return;
-          if (res.position < gameSize) {
-            let targetUser = msg.guild.members.cache.get(res.player);
-            targetUser.send(
-              new Discord.MessageEmbed()
-                .setColor("#0099ff")
-                .setTitle(`Hey Crewmate, you're up!`)
-                .setDescription(
-                  `Hiya! It's your turn for Among Us. ${
-                    res.roomCode ? `The room code is: ${res.roomCode}\n` : "\n"
-                  }Join the voice call [here!](${process.env.VC_LINK})`
-                )
-            );
-          }
-        });
+        await queue
+          .dequeue(msg.guild.id, command[i].substring(3, 21))
+          .then((res) => {
+            console.log("kicked,res=", res);
+            if (res === null) return;
+            if (res.position < gameSize) {
+              let targetUser = msg.guild.members.cache.get(res.player);
+              targetUser.send(
+                new Discord.MessageEmbed()
+                  .setColor("#0099ff")
+                  .setTitle(`Hey Crewmate, you're up!`)
+                  .setDescription(
+                    `Hiya! It's your turn for Among Us. ${
+                      res.roomCode
+                        ? `The room code is: ${res.roomCode}\n`
+                        : "\n"
+                    }Join the voice call [here!](${process.env.VC_LINK})`
+                  )
+              );
+            }
+          });
       }
+      showQueue(msg);
     }
 
     if (["setCode", "sc"].includes(command[0])) {
@@ -140,7 +119,41 @@ async function connect() {
   });
 
   client.login(process.env.TOKEN);
-}
+};
+
+const showQueue = (msg) => {
+  queue.getQueue(msg.guild.id).then(async (queue) => {
+    let inGame = "```";
+    let i;
+    for (i = 0; i < Math.min(queue.length, gameSize); i++) {
+      inGame =
+        inGame +
+        `\n${i + 1}) ${
+          msg.guild.members.cache.get(queue[i].player).user.username
+        }`;
+    }
+    inGame = inGame + "\n```";
+
+    let nextQueue = "```";
+    for (let j = 1; j <= Math.max(queue.length - gameSize, 0); j++, i++) {
+      nextQueue =
+        nextQueue +
+        `\n${i + 1}) ${
+          msg.guild.members.cache.get(queue[i].player).user.username
+        }`;
+    }
+    nextQueue = nextQueue + "\n```";
+
+    let queueMessage = new Discord.MessageEmbed()
+      .setColor("#7289da")
+      .setTitle("")
+      .setDescription("")
+      .addField("Currently in Game:", inGame)
+      .addField("Next in Queue:", nextQueue);
+
+    msg.channel.send(queueMessage);
+  });
+};
 
 module.exports = {
   connect,
