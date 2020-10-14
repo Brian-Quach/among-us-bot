@@ -49,19 +49,8 @@ const connect = async () => {
           .then((res) => {
             console.log(res);
 
-            if (res.position < gameSize) {
-              targetUser.send(
-                new Discord.MessageEmbed()
-                  .setColor("#0099ff")
-                  .setTitle(`Hey Crewmate, you're up!`)
-                  .setDescription(
-                    `Hiya! You've been queued for Among Us. ${
-                      res.roomCode
-                        ? `The room code is: ${res.roomCode}\n`
-                        : "\n"
-                    }Join the voice call [here!](${process.env.VC_LINK})`
-                  )
-              );
+            if (res.isPlaying && res.position < gameSize) {
+              sendJoinMessage(targetUser, res);
             }
           });
       }
@@ -79,20 +68,9 @@ const connect = async () => {
           .then((res) => {
             console.log("kicked,res=", res);
             if (res === null) return;
-            if (res.position < gameSize) {
+            if (res.isPlaying && res.position < gameSize) {
               let targetUser = msg.guild.members.cache.get(res.player);
-              targetUser.send(
-                new Discord.MessageEmbed()
-                  .setColor("#0099ff")
-                  .setTitle(`Hey Crewmate, you're up!`)
-                  .setDescription(
-                    `Hiya! It's your turn for Among Us. ${
-                      res.roomCode
-                        ? `The room code is: ${res.roomCode}\n`
-                        : "\n"
-                    }Join the voice call [here!](${process.env.VC_LINK})`
-                  )
-              );
+              sendJoinMessage(targetUser, res);
             }
           });
       }
@@ -116,6 +94,34 @@ const connect = async () => {
         });
       });
     }
+
+    if (["start", "startgame"].includes(command[0])) {
+      await queue.startGame(msg.guild.id);
+
+      queue.getQueue(msg.guild.id).then(async (queue) => {
+        for (let i=0; i< queue.length; i++){
+          let targetUser = msg.guild.members.cache.get(queue[i].player);
+          sendJoinMessage(targetUser, queue[i]);
+        }
+      })
+
+      let gameStartMessage = new Discord.MessageEmbed()
+      .setColor("#7289da")
+      .setTitle("Game started!")
+
+      msg.channel.send(gameStartMessage);
+    }
+
+    if (["stop", "end", "stopgame"].includes(command[0])) {
+      queue.endGame(msg.guild.id);
+
+      let gameEndedMessage = new Discord.MessageEmbed()
+      .setColor("#7289da")
+      .setTitle("Game ended.")
+
+      msg.channel.send(gameEndedMessage);
+    }
+
   });
 
   client.login(process.env.TOKEN);
@@ -154,6 +160,21 @@ const showQueue = (msg) => {
     msg.channel.send(queueMessage);
   });
 };
+
+const sendJoinMessage = (targetUser, res) => {
+  targetUser.send(
+    new Discord.MessageEmbed()
+      .setColor("#0099ff")
+      .setTitle(`Hey Crewmate, you're up!`)
+      .setDescription(
+        `Hiya! It's your turn for Among Us. ${
+          res.roomCode
+            ? `The room code is: ${res.roomCode}\n`
+            : "\n"
+        }Join the voice call [here!](${process.env.VC_LINK})`
+      )
+  );
+}
 
 module.exports = {
   connect,
