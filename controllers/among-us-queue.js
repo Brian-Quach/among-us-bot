@@ -7,7 +7,7 @@ const setup = async () => {
   return new Promise(function (resolve) {
     db.serialize(() => {
       db.run(
-        "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode TEXT, players INTEGER NOT NULL );"
+        "CREATE TABLE IF NOT EXISTS queues ( serverId INTEGER NOT NULL UNIQUE, gameCode TEXT, players INTEGER NOT NULL, isPlaying INTEGER NOT NULL );"
       );
       db.run(
         "CREATE TABLE IF NOT EXISTS players ( queue INTEGER NOT NULL, player TEXT NOT NULL, inGame INTEGER DEFAULT 0);"
@@ -17,10 +17,10 @@ const setup = async () => {
   });
 };
 
-const createQueue = async (serverId, creatorId = null, numPlayers = 10) => {
+const createQueue = async (serverId, creatorId = null, numPlayers = gameSize) => {
   db.serialize(() => {
     db.run(
-      `INSERT INTO queues (serverId, players) VALUES (${serverId}, ${numPlayers});`,
+      `INSERT INTO queues (serverId, players, isPlaying) VALUES (${serverId}, ${numPlayers}, 0);`,
       function (err) {
         if (err) {
           if (err.errno === 19) {
@@ -64,6 +64,18 @@ const createQueue = async (serverId, creatorId = null, numPlayers = 10) => {
   });
 };
 
+const startGame = async (serverId) => {
+  db.run(
+    `UPDATE queues SET isPlaying = 1 WHERE serverId = ${serverId};`
+  );
+}
+
+const endGame = async (serverId) => {
+  db.run(
+    `UPDATE queues SET isPlaying = 0 WHERE serverId = ${serverId};`
+  );
+}
+
 const setCode = async (serverId, gameCode) => {
   db.run(
     `UPDATE queues SET gameCode = "${gameCode}" WHERE serverId = ${serverId};`
@@ -73,11 +85,13 @@ const setCode = async (serverId, gameCode) => {
 const getQueue = async (serverId, num = null) => {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
+      `SELECT rowID, isPlaying FROM queues WHERE serverId = ${serverId};`,
       (err, row) => {
         if (err) {
           return reject(err.message);
         }
+
+        console.log(row);
 
         db.all(
           `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
@@ -104,13 +118,13 @@ const getQueue = async (serverId, num = null) => {
 const enqueue = async (serverId, playerId) => {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT rowID FROM queues WHERE serverId = ${serverId};`,
-      (err, row) => {
+      `SELECT rowID, isPlaying FROM queues WHERE serverId = ${serverId};`,
+      (err, queue) => {
         if (err) {
           return reject("Couldn't find queue");
         }
         db.all(
-          `SELECT rowID, * FROM players WHERE queue = ${row.rowid} AND inGame = 1;`,
+          `SELECT rowID, * FROM players WHERE queue = ${queue.rowid} AND inGame = 1;`,
           function (err, res) {
             if (err) {
               return reject(err.message);
@@ -121,7 +135,7 @@ const enqueue = async (serverId, playerId) => {
             db.serialize(() => {
               db.run(
                 `INSERT INTO players (queue, player, inGame) VALUES (${
-                  row.rowid
+                  queue.rowid
                 }, ${playerId}, ${currNumQueued < gameSize ? 1 : 0})`,
                 function (err) {
                   if (err) {
@@ -140,7 +154,7 @@ const enqueue = async (serverId, playerId) => {
                 }
               );
               db.all(
-                `SELECT rowID, * FROM players WHERE queue = ${row.rowid};`,
+                `SELECT rowID, * FROM players WHERE queue = ${queue.rowid};`,
                 (err, res) => {
                   if (err) {
                     return reject(err.message);
@@ -151,6 +165,7 @@ const enqueue = async (serverId, playerId) => {
                       let res = {
                         player: playerId,
                         roomCode: roomCode,
+                        isPlaying: queue.isPlaying,
                         position: index,
                       };
                       resolve(res);
@@ -174,6 +189,7 @@ const dequeue = async (serverId, playerId) => {
         return reject("Couldn't find queue");
       }
       const gameCode = res.gameCode;
+      const isPlaying = res.isPlaying;
       db.serialize(() => {
         db.get(
           `SELECT rowID, * FROM players WHERE player = ${playerId};`,
@@ -228,6 +244,7 @@ const dequeue = async (serverId, playerId) => {
                             resolve({
                               player: res[i].player,
                               roomCode: gameCode,
+                              isPlaying: isPlaying,
                               position: i,
                             });
                           }
@@ -252,4 +269,6 @@ module.exports = {
   getQueue,
   enqueue,
   dequeue,
+  startGame,
+  endGame
 };
